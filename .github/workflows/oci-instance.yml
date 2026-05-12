@@ -45,16 +45,17 @@ jobs:
             --subnet-id "${{ secrets.OCI_SUBNET_ID }}" \
             --display-name "NexaGIS-Server" \
             --ssh-authorized-keys-file ~/.ssh/oci_rsa.pub \
-            --wait-for-state RUNNING \
-            2>&1)
+            2>&1) || true
 
           echo "$RESULT"
 
-          if echo "$RESULT" | grep -q "Out of host capacity"; then
+          if echo "$RESULT" | grep -qi "capacity\|host capacity\|out of capacity"; then
             echo "STATUS=failed" >> $GITHUB_ENV
-          else
+          elif echo "$RESULT" | grep -qi "ocid1.instance"; then
             echo "STATUS=success" >> $GITHUB_ENV
-            echo "$RESULT" > instance_info.json
+          else
+            echo "STATUS=failed" >> $GITHUB_ENV
+            echo "Erreur inattendue"
           fi
 
       - name: Afficher l'IP de l'instance
