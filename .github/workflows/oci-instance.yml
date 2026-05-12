@@ -1,0 +1,78 @@
+name: OCI Instance Provisioner
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'  # toutes les 10 minutes
+  workflow_dispatch:          # déclenchement manuel aussi
+
+jobs:
+  create-instance:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Installer OCI CLI
+        run: |
+          curl -L https://raw.githubusercontent.com/oracle/oci-cli/master/scripts/install/install.sh > install.sh
+          chmod +x install.sh
+          ./install.sh --accept-all-defaults
+          echo "/home/runner/bin" >> $GITHUB_PATH
+
+      - name: Configurer OCI CLI
+        run: |
+          mkdir -p ~/.oci
+          echo "[DEFAULT]" > ~/.oci/config
+          echo "user=${{ secrets.OCI_USER_OCID }}" >> ~/.oci/config
+          echo "fingerprint=${{ secrets.OCI_FINGERPRINT }}" >> ~/.oci/config
+          echo "tenancy=${{ secrets.OCI_TENANCY_OCID }}" >> ~/.oci/config
+          echo "region=${{ secrets.OCI_REGION }}" >> ~/.oci/config
+          echo "key_file=~/.oci/oci_api_key.pem" >> ~/.oci/config
+          echo "${{ secrets.OCI_PRIVATE_KEY }}" > ~/.oci/oci_api_key.pem
+          chmod 600 ~/.oci/oci_api_key.pem
+
+      - name: Générer clé SSH pour l'instance
+        run: |
+          ssh-keygen -t rsa -b 2048 -f ~/.ssh/oci_rsa -N ""
+          echo "SSH_PUBLIC_KEY=$(cat ~/.ssh/oci_rsa.pub)" >> $GITHUB_ENV
+
+      - name: Tenter la création de l'instance
+        id: create
+        run: |
+          RESULT=$(oci compute instance launch \
+            --availability-domain "jscU:EU-PARIS-1-AD-1" \
+            --compartment-id "${{ secrets.OCI_TENANCY_OCID }}" \
+            --shape "VM.Standard.A1.Flex" \
+            --shape-config '{"ocpus":4,"memoryInGBs":24}' \
+            --image-id "ocid1.image.oc1.eu-paris-1.aaaaaaaabm4lqa5ok6ciib4ps4sqcujdrxiwpkhdjqdjnbueh3tpupt7tewa" \
+            --subnet-id "${{ secrets.OCI_SUBNET_ID }}" \
+            --display-name "NexaGIS-Server" \
+            --ssh-authorized-keys-file ~/.ssh/oci_rsa.pub \
+            --wait-for-state RUNNING \
+            2>&1)
+
+          echo "$RESULT"
+
+          if echo "$RESULT" | grep -q "Out of host capacity"; then
+            echo "STATUS=failed" >> $GITHUB_ENV
+          else
+            echo "STATUS=success" >> $GITHUB_ENV
+            echo "$RESULT" > instance_info.json
+          fi
+
+      - name: Afficher l'IP de l'instance
+        if: env.STATUS == 'success'
+        run: |
+          oci compute instance list-vnics \
+            --compartment-id "${{ secrets.OCI_TENANCY_OCID }}" \
+            --query "data[0].\"public-ip\"" \
+            --raw-output
+
+      - name: Désactiver le workflow si succès
+        if: env.STATUS == 'success'
+        run: |
+          echo "✅ Instance créée avec succès ! Désactive manuellement ce workflow."
+          exit 0
+
+      - name: Capacité indisponible
+        if: env.STATUS == 'failed'
+        run: |
+          echo "❌ Pas de capacité disponible. Retry dans 10 minutes..."
+          exit 0
