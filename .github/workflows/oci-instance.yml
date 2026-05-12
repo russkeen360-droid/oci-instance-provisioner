@@ -1,9 +1,7 @@
 name: OCI Instance Provisioner
 
 on:
-  schedule:
-    - cron: '*/10 * * * *'  # toutes les 10 minutes
-  workflow_dispatch:          # déclenchement manuel aussi
+  workflow_dispatch:  # déclenché uniquement par cron-job.org
 
 jobs:
   create-instance:
