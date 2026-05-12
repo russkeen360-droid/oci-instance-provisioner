@@ -10,11 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Installer OCI CLI
-        run: |
-          curl -L https://raw.githubusercontent.com/oracle/oci-cli/master/scripts/install/install.sh > install.sh
-          chmod +x install.sh
-          ./install.sh --accept-all-defaults
-          echo "/home/runner/bin" >> $GITHUB_PATH
+        run: pip install oci-cli --quiet
 
       - name: Configurer OCI CLI
         run: |
@@ -60,6 +56,7 @@ jobs:
       - name: Afficher l'IP de l'instance
         if: env.STATUS == 'success'
         run: |
+          sleep 30
           oci compute instance list-vnics \
             --compartment-id "${{ secrets.OCI_TENANCY_OCID }}" \
             --query "data[0].\"public-ip\"" \
