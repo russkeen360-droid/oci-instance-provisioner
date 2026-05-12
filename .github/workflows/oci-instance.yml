@@ -41,6 +41,7 @@ jobs:
             --subnet-id "${{ secrets.OCI_SUBNET_ID }}" \
             --display-name "NexaGIS-Server" \
             --ssh-authorized-keys-file ~/.ssh/oci_rsa.pub \
+            --boot-volume-size-in-gbs 200 \
             2>&1) || true
 
           echo "$RESULT"
@@ -62,7 +63,7 @@ jobs:
             --query "data[0].\"public-ip\"" \
             --raw-output
 
-      - name: Désactiver le workflow si succès
+      - name: Succès
         if: env.STATUS == 'success'
         run: |
           echo "✅ Instance créée avec succès ! Désactive manuellement ce workflow."
